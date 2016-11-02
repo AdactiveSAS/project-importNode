@@ -35,3 +35,8 @@ jspm_packages
 
 # Optional REPL history
 .node_repl_history
+data/Signall/Adresses et numéros de téléphone des contacts.txt
+data/Signall/AvantageBusiness_FormatImport_Contacts.csv
+log.csv
+log.txt
+start.js
