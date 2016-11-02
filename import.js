@@ -1,9 +1,6 @@
 
 var fs = require('fs');
-var unidecode = require('unidecode')
 var XLSX = require('xlsx');
-
-var xhr = require("xhr")
 var ACA = require('./vendor/adsum-client-api.es5.js')
 
 
