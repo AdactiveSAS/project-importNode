@@ -1,7 +1,7 @@
 const CryptoJS = require("crypto-js");
 const restify = require("restify-clients");
-
-
+var fs = require('fs');
+var mkdirp = require('mkdirp');
 
 
 var api = module.exports = function api(username,key,endPoint,siteId) { 
@@ -12,6 +12,12 @@ var api = module.exports = function api(username,key,endPoint,siteId) {
     this._client = restify.createJsonClient(this._endPoint);
 
 
+
+    this._postStack = [];
+
+    console.log("Endpoint on " + endPoint);
+    console.log("Run on site " + siteId);
+    console.log("Run on user  " + username);
 };
 
 api.prototype.createWSSEHeader = function() {
@@ -26,12 +32,43 @@ api.prototype.createWSSEHeader = function() {
 
 
 
-api.prototype.getAllObjects = function(type,cb){
-        this.getData('/2.1/'+type+'?site='+this._siteId,(err, req, res) => {
+api.prototype.getAllObjects = function(type,cb,arr){
+      if(arr == undefined)
+      {
+        var currentobjs = [];
+      }else{
+        var currentobjs = [].concat(arr);
+      }
+        
+
+        this.getData('/2.1/'+type+'?site='+this._siteId+"&start="+(currentobjs.length),(err, req, res) => {
                     if (err) {
                         console.log("GET KO : " + err)
                     } else {
-                         cb(JSON.parse(res.body));
+                         var objs = JSON.parse(res.body);
+                         currentobjs = currentobjs.concat(objs);
+
+
+                         var max = 1;
+                         var header =eval(res.rawHeaders);
+                         for(var i=0;i <header.length;i++)
+                         {
+                            if(header[i] =="Content-Range")
+                            {
+                                var cr = header[i+1];
+                                var array = cr.split('/');
+                                if(array.length >1)
+                                 max = array[1];
+                            }
+                         }
+                         if(max > currentobjs.length)
+                         {
+
+                            this.getAllObjects(type,cb,currentobjs);
+                         }else{
+
+                            cb(currentobjs);
+                         }                      
                     }
                 }
         );
@@ -39,6 +76,7 @@ api.prototype.getAllObjects = function(type,cb){
 
 api.prototype.postObject = function(type, obj, callback){
        obj.site = this._siteId;
+
        this._client.post({
                 path: '/2.1/'+type,
                 headers: {
@@ -51,7 +89,6 @@ api.prototype.postObject = function(type, obj, callback){
                     console.log("POST KO : " + err)
                     callback();
                 } else {
-                 //   console.log("POST OK : " +JSON.parse(res.body).id)
                     obj.id = JSON.parse(res.body).id;
                     callback(obj);
                 }
@@ -60,7 +97,60 @@ api.prototype.postObject = function(type, obj, callback){
     };
 
 
+api.prototype.postObjects = function(type, objs, callback){
+        if(objs.length >= 1)
+        {
+            var object = objs.pop();
+            object.site = this._siteId;
+            this.postObject(type,object,() =>
+            {
+                console.log("Post done " + object.name);
+                this.postObjects(type,objs,callback);
+            });
+        }else{
+          callback();
+        }
+    };
+
+
+
+api.prototype.backup = function(){
+    var dir = "./backup/"+ this._siteId;
+    if (!fs.existsSync(dir)){
+      mkdirp(dir);
+    }
+    this.getAllObjects("place",(objs) =>
+    {
+           fs.writeFile(dir + "/place.json", JSON.stringify(objs), function (err) {});
+    })
+    this.getAllObjects("poi",(objs) =>
+    {
+           fs.writeFile(dir + "/poi.json", JSON.stringify(objs), function (err) {});
+    })
+    this.getAllObjects("category",(objs) =>
+    {
+           fs.writeFile(dir + "/category.json", JSON.stringify(objs), function (err) {});
+    })
+    this.getAllObjects("tag",(objs) =>
+    {
+           fs.writeFile(dir + "/tag.json", JSON.stringify(objs), function (err) {});
+    })
+    this.getAllObjects("playlist",(objs) =>
+    {
+           fs.writeFile(dir + "/playlist.json", JSON.stringify(objs), function (err) {});
+    })
+    this.getAllObjects("media",(objs) =>
+    {
+           fs.writeFile(dir + "/media.json", JSON.stringify(objs), function (err) {});
+    })
+};
+
+
+
+
+
 api.prototype.deleteObject = function(objectType,objectId, callback){
+
         this._client.del({
                 path: '/2.1/'+objectType+"/"+objectId+'?site='+this._siteId,
                 headers: {
@@ -68,7 +158,7 @@ api.prototype.deleteObject = function(objectType,objectId, callback){
                     "X-WSSE": this.createWSSEHeader()
                 }
             },
-            (err, req, res) => {
+            (err, req, res) => {""
                 if (err) {
                     console.log("DELETE KO : " + err)
                     callback(false)
@@ -110,36 +200,24 @@ api.prototype.getObjectByName = function(type,name,cb){
 
 
 
-api.prototype.deleteAllData = function()
+api.prototype.deleteAllEntities = function(type)
 {
-    this.getAllObjects('category',(objs) =>
+    this.getAllObjects(type,(objs) =>
     {
+        var scope = this;
 
         for(var i =0; i<objs.length;i++)
         {
-            console.log('found category id : ' +objs[i].id);
-           this.deleteObject("category",objs[i].id,(tag)=>
-            {
-                if(tag)
+           (function(foo){
+               console.log('found '+type+' id : ' +foo.id);
+               scope.deleteObject(type,foo.id,(tag)=>
                 {
-                    console.log("CATEGORY DELETED");
-                }
-            });
-        }
-    });
-    this.getAllObjects('poi',(objs) =>
-    {
-
-        for(var i =0; i<objs.length;i++)
-        {
-            console.log('found poi id : ' +objs[i].id);
-            this.deleteObject("poi",objs[i].id,(tag)=>
-            {
-                if(tag)
-                {
-                    console.log("POI DELETED");
-                }
-            });
+                    if(tag)
+                    {
+                        console.log(type + " " +foo+" deleted");
+                    }
+                });
+            }(objs[i]));
         }
     });
 }

@@ -2,8 +2,8 @@ const XLSX = require("xlsx");
 const api = require("./api.js");
 
 
-const _api = new api("423-device",'0f18cb5d5b1f1cc20ac9d85b331a03bd9ef3a844a367fe8054fd3f30afe4b2dd','https://preprod-api.adsum.io',366)
-//const _api = new api("312-device",'87eb7324ea507909668dcdd4def8069bf50689ee8c4db8f4f275ec805e3757f2','https://asia-api.adsum.io',302)
+//const _api = new api("423-device",'0f18cb5d5b1f1cc20ac9d85b331a03bd9ef3a844a367fe8054fd3f30afe4b2dd','https://preprod-api.adsum.io',366)
+const _api = new api("312-device",'87eb7324ea507909668dcdd4def8069bf50689ee8c4db8f4f275ec805e3757f2','https://asia-api.adsum.io',302)
 
 
 
@@ -15,183 +15,257 @@ const _file = "data/FE/FE.xlsx"
 
 const _obj = {};
 var _count = 0;
-var _mode = "normal";
+var _mode = process.argv[2];
 
-process.argv.forEach(function (val, index, array) {
-  if(val == "del")
-  {
-    _mode = "del";
-  }
-});
+
+
+parseXlsxSheet(_categorySheet,parseCategory);
+parseXlsxSheet(_poiSheet,parsePoi);  
 
 
 
 if(_mode == "del")
 {
     console.log("Delete All Data")
-    _api.deleteAllData();
-}else{
+    _api.deleteAllEntities("poi");
+    _api.deleteAllEntities("category");
+    return;
+}else if(_mode == "dev"){
+ 
+   _api.getAllObjects("customobject",function(objs)
+   {
+       var cos = [];
+        for(var i=0;i<objs.length;i++)
+        {
+            if(objs[i].poi== 106414)
+            {
+                var coo = objs[i];
+                coo.priority=1;
+                coo.orientation_mode = 'STATIC';
+                cos.push(coo);
+            }
+        }
+        _api.postObjects("customobject",cos,function()
+        {
+            console.log("end");
+        })
+   });
+  return;
+}else if(_mode == ""){
+
+return;
+
+}
 
 
 
-parseXlsxSheet(_categorySheet,execCategory);
-parseXlsxSheet(_poiSheet,execPoi);  
 
-
-updatePoiPlaces().then(() =>
+updateLocalData(() =>
 {
-    console.log("Post Pois");
-    postPoi();
-});
-/*
-console.log("Post Mother Categories");
-execMotherCategory().then(() =>
+execMotherCategory(() => 
 {
-    console.log("Post NOT Mother Categories");
-    execNOTMotherCategory().then(() =>
+updateLocalData(() =>
+{
+execNOMotherCategory(() =>
+{
+updateLocalData(() =>
+{
+updatePoiPlaces(() =>
+{
+    execPoi(() =>
     {
         console.log("END");
-    }).catch(err)
-    {
-        console.log(err);
-    };
 
+    });
 });
-*/
+});
+});
+});
+});
+});
 
+
+
+function deletePoiWithoutCategory()
+{
+    var pois  =[];
+    _api.getAllObjects("poi",(objs) =>
+    {
+        for(var i=0;i<objs.length;i++)
+        {
+            if(objs[i].categories.length ==0)
+            {
+                _api.deleteObject("poi",objs[i].id,()=>
+                    {
+
+                    });
+            }
+        }
+    });
 
 }
 
 
 
-
-
-
-function updatePoiPlaces()
+function extractUnassociatedPois()
 {
-    var promises = [];
-    for(poi in _obj["poi"])
+
+    _api.getAllObjects("poi",(objs) =>
     {
-       (function(foo){
-       var place = "Ambre";//_obj["poi"][poi].place;
-         console.log("foo : " + foo);
-        var p = new Promise((resolve) => {
-            _api.getObjectByName("place",place,(res) =>
+        for(var i=0;i<objs.length;i++)
+        {
+            if(objs[i].places.length !=0)
             {
-                
-                if(res.length > 0 )
+                var p =  getObjectByName("poi",objs[i].name);
+                var place = p ==  undefined ? "" : p.place;
+                console.log(objs[i].name+";"+place);
+            }
+        }
+    });
+
+}
+
+
+function movePoisFromCatToCat(fromId, toId)
+{
+    var poisToMove = [];
+    _api.getAllObjects("poi",(objs) =>
+    {
+        for(var i=0;i<objs.length;i++)
+        {
+            var poi = objs[i]; 
+            if(poi.categories.length !=0)
+            {
+                if(poi.categories[0] == fromId)
                 {
-                    _obj["poi"][foo].places = [res[0].id];
+                    var newPoi = {};
+                    newPoi.name = poi.name;
+                    newPoi.type = "store";
+                    newPoi.places = poi.places;
+                    newPoi.categories = [toId];
+                    poisToMove.push(newPoi);
                 }
-                resolve();
-            });
-
+            }
+        }
+        console.log(poisToMove);
+        _api.postObjects("poi",poisToMove,function(){
+            console.log("end");
         });
-       promises.push(p);
-       }(poi));
-
-    }
-
-    return Promise.all(promises)
+    });
 }
 
 
-
-function postPoi()
+function execMotherCategory(callback)
 {
-    var promises = [];
-    for(poi in _obj["poi"])
+    var categories = [];
+    for(var i=0;i<_obj["category"].length;i++)
     {
-        console.log("---- Post " + poi)
-        var p = new Promise((resolve) => {
-            var p = _obj["poi"][poi];
-            p.type = "store";
-            _api.postObject("poi",p,(obj) =>
+        if(_obj["category"][i].mother == undefined && _obj["category"][i].id == undefined ){
+            categories.push(_obj["category"][i]);
+        }
+    }
+    _api.postObjects("category",categories,() =>
+    {
+        console.log("---- Post OK Categories mother done");
+        callback();
+    });
+}
+
+function execNOMotherCategory(callback)
+{
+    var categories = [];
+    for(var i=0;i<_obj["category"].length;i++)
+    {
+        var cat = _obj["category"][i];
+        var mother = cat.mother;
+
+        if(mother && cat.id == undefined){
+            var motherObj = getObjectByName("category",mother);
+            if(motherObj == undefined || motherObj.id == undefined)
             {
-                if(obj)
-                  console.log("---- Post OK : " +  obj.name);
-                resolve();
-            });
-        });
-        promises.push(p);
-    }
-
-    return Promise.all(promises)
-
-
-// time+=1000;
-// setTimeout(function(a){ postPoi(a)}, time,o);
-}
-
-
-function execNOTMotherCategory()
-{
-    var promises = [];
-    for(cat in _obj["category"])
-    {
-       var mother = _obj["category"][cat].mother;
-        if(_obj["category"][cat].mother != undefined)
-        {
-            var motherId = _obj["category"][mother].id;
-            _obj["category"][cat].parents = [motherId];
-            console.log("---- Post " + cat)
-            var p = new Promise((resolve) => {
-                _api.postObject("category",_obj["category"][cat],(obj) =>
-                {
-                    if(obj)
-                      console.log("---- Post OK : " +  obj.name);
-                    resolve();
-                });
-            });
-            promises.push(p);
+                console.log("ERR : Can't find category mother " + mother +" of " + cat.name);
+                continue;
+            }
+            cat.parents = [motherObj.id];
+            categories.push(cat);
         }
     }
-
-    return Promise.all(promises)
-}
-
-
-
-
-function execMotherCategory()
-{
-    var promises = [];
-    for(cat in _obj["category"])
+    _api.postObjects("category",categories,() =>
     {
-        if(_obj["category"][cat].mother == undefined)
-        {
-            console.log("---- Post " + cat)
-            var p = new Promise((resolve, reject) => {
-                _api.postObject("category",_obj["category"][cat],(obj) =>
-                {
-                    console.log("---- Post OK : " +  obj.name);
-                    resolve();
-                });
-            });
-            promises.push(p);
-        }
-    }
-
-    return Promise.all(promises)
+        console.log("---- Post OK Categories mother done");
+        callback();
+    });
 }
+
+
+
+
+function updatePoiPlaces(callback)
+{
+    _api.getAllObjects("place",(objs) =>
+    {
+        for(var i=0; i<_obj["poi"].length;i++)
+        {  
+            for(var j=0; j<objs.length;j++)
+            {  
+                if(objs[j].name == _obj["poi"][i].place)
+                {
+                    _obj["poi"][i].places = [objs[j].id];
+                }
+            }
+        }
+       
+        callback();
+    });
+}
+
+
+
+function execPoi(callback)
+{
+    var pois = [];
+    for(var i=0;i<_obj["poi"].length;i++)
+    {
+        var poi = _obj["poi"][i];
+        if(poi.id == undefined){
+            var catObject = getObjectByName("category",poi.category);
+            if(catObject){
+                poi.categories = [catObject.id];
+            }
+            poi.type = "store";
+            pois.push(poi);
+         }
+
+    }
+    _api.postObjects("poi",_obj["poi"],() =>
+    {
+        console.log("---- Post POI done");
+        callback();
+    });
+}
+
+
 
 function readCategories(cb)
 {
     var promises = [];
-    for(cat in _obj["category"])
+    for(var i =0;i<_obj["category"].length;i++)
     {
-        var p3 = new Promise((resolve, reject) => {
-            getCategory(cat,(objs) =>
-            {
-                if(objs.length > 1){
-                    var catObject = objs[0];
-                    _obj["category"][catObject.name].id = catObject.id;  
-                    console.log(catObject.name + " OK");
-                }
-                resolve();
+        (function(index)
+        {
+            var p3 = new Promise((resolve, reject) => {
+                getCategory(cat,(objs) =>
+                {
+                    if(objs.length > 1){
+                        var catObject = objs[0];
+                        _obj["category"][index].id = catObject.id;  
+                        console.log(catObject.name + " OK");
+                    }
+                    resolve();
+                });
             });
-        });
-        promises.push(p);
+            promises.push(p);
+        })(i);
     }
 
     return Promise.all(promises)
@@ -199,15 +273,17 @@ function readCategories(cb)
 }
 
 
-function post()
-{
-    for(cat in _obj["category"])
-    {
-        postCategory(_obj["category"][cat]);
-    }
-}
 
-function execCategory(obj)
+
+
+
+
+
+
+
+
+
+function parseCategory(obj)
 {
     var catMother = {};
     catMother.name = obj["MainCategories"];
@@ -221,18 +297,39 @@ function execCategory(obj)
     addObject(catSubMother);
 }
 
-function execPoi(obj)
+function parsePoi(obj)
 {
-    if(_count++ > 10)
-      return;
-        const poi = {};
-        poi.type = 'poi';
-        poi.name = obj["Shop Name"];
-        poi.place = obj["Unit No"].replace(" ", "_").replace("#", "");
-        poi.category = obj["Business"];
-        addObject(poi);
+    const poi = {};
+    poi.type = 'poi';
+    poi.name = obj["Shop Name"];
+    poi.place = obj["Unit No"].replace(" ", "_").replace("#", "");
+    poi.category = obj["Business"];
+    addObject(poi);
 }
 
+
+
+function updateLocalData(callback)
+{
+    console.log("update");
+
+    _api.getAllObjects("category",(objs) =>{
+        for(var i=0;i < objs.length;i++)
+        {
+            console.log("Object " + objs[i].name+" found");
+            obj = getObjectByName("category",objs[i].name);
+            if(obj)
+            {
+                obj.id = objs[i].id;
+            }
+        }
+        callback();
+    });
+
+}
+
+
+//DATAMANAGER
 function addObject(obj)
 {
 
@@ -241,11 +338,38 @@ function addObject(obj)
         _obj[obj.type] = [];
     }
 
-     _obj[obj.type][obj.name] = obj;
-
+    for(var i=0; i<_obj[obj.type].length;i++)
+    {
+        if(_obj[obj.type][i].name == obj.name)
+        {
+            return;
+        }
+    }
+     _obj[obj.type].push(obj);
 }
 
+function getObjectByName(type,name)
+{
+    if(_obj[type] == undefined)
+    {
+          console.log("ERR : can't find type : "+type)
+          return
+    }
+      
 
+    for(var i=0; i<_obj[type].length;i++)
+    {
+        if(_obj[type][i].name == name)
+        {
+            return _obj[type][i];
+        }
+    }
+    return ;
+}
+//DATAMANAGER
+
+
+//XML
 function parseXlsxSheet(sheet,exec){
     const workbook = XLSX.readFile(_file);
 
@@ -286,5 +410,5 @@ function parseXlsxSheet(sheet,exec){
 
     }
 };
-
+//XML
 
