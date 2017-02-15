@@ -1,4 +1,4 @@
-# Logs
+﻿# Logs
 logs
 *.log
 npm-debug.log*
@@ -40,3 +40,5 @@ data/Signall/AvantageBusiness_FormatImport_Contacts.csv
 log.csv
 log.txt
 start.js
+
+.idea

@@ -1,3 +1,5 @@
+"use strict"
+
 const CryptoJS = require("crypto-js");
 const restify = require("restify-clients");
 var fs = require('fs');
@@ -68,7 +70,7 @@ api.prototype.getAllObjects = function(type,cb,arr){
                          }else{
 
                             cb(currentobjs);
-                         }                      
+                         }
                     }
                 }
         );

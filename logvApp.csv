@@ -1,0 +1,13 @@
+Endpoint on https://api.adsum.io
+Run on site 298
+Run on user  311-device
+/2.1/place?site=298&start=0
+/2.1/place?site=298&start=500
+/2.1/place?site=298&start=1000
+/2.1/place?site=298&start=1500
+/2.1/place?site=298&start=2000
+/2.1/place?site=298&start=2500
+/2.1/place?site=298&start=3000
+/2.1/place?site=298&start=3500
+/2.1/place?site=298&start=4000
+/2.1/place?site=298&start=4500

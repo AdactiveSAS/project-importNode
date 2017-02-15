@@ -1,11 +1,94 @@
 const XLSX = require("xlsx");
 const api = require("./api.js");
 
+const _api = new api("311-device",'1452df5b8def6b645d9a0196600e9282e595c8c3e1c15d9aabffab2d5e26fca3','https://api.adsum.io', 298)
+const _file = "data/Loreal/vApp.xlsx"
+var _residentList = [];
+var _sheetName;
+ 
+ if(_file == "data/Loreal/V8.xlsx")
+ {
+	 _sheetName = "BASE RESIDENTS LOF";
+ }
+ else
+ {
+	 _sheetName = "BASE RESIDENTS";
+ }
+ 
+ parseXlsxSheet(_sheetName, parseResident);
 
-//const _api = new api("423-device",'0f18cb5d5b1f1cc20ac9d85b331a03bd9ef3a844a367fe8054fd3f30afe4b2dd','https://preprod-api.adsum.io',366)
-const _api = new api("312-device",'87eb7324ea507909668dcdd4def8069bf50689ee8c4db8f4f275ec805e3757f2','https://asia-api.adsum.io',302)
+_api.getAllObjects("place",function(objs)
+{
+	for(var i=0;i<_residentList.length;i++)
+	{
+		var found = false;
+		
+		for(var j=0;j<objs.length;j++)
+		{
+			if(objs[j].name == _residentList[i])
+			{
+				found = true;
+				break;
+			}
+		}
+		
+		if(!found && _residentList[i] != undefined)
+		{
+			console.log(_residentList[i]);
+		}
+	}
+}
+);
 
+function parseResident(obj)
+{
+    const poi = {};
+	_residentList.push(obj["AFFECTATION SO France"]);
+}
 
+function parseXlsxSheet(sheet,exec){
+    const workbook = XLSX.readFile(_file);
+
+    const sheet_name_list = workbook.SheetNames;
+
+    for (const y of sheet_name_list) {
+
+        if(y != sheet)
+        {
+            continue;
+        }
+		
+		console.log("plop");
+		
+        var worksheet = workbook.Sheets[y];
+        var headers = {};
+        var data = [];
+
+        for (const z in worksheet) {
+            if (z[0] === '!') continue;
+            //parse out the column, row, and value
+            var col = z.substring(0, 1);
+            var row = parseInt(z.substring(1));
+            var value = worksheet[z].v;
+
+            //store header names
+            if (row == 1) {
+                headers[col] = value;
+                continue;
+            }
+
+            if (!data[row]) data[row] = {};
+            data[row][headers[col]] = value;
+          
+        }
+
+        for (var row2 in data) {
+            exec(data[row2]);
+        }
+    }
+};
+
+/*
 
 
 
@@ -368,47 +451,6 @@ function getObjectByName(type,name)
 }
 //DATAMANAGER
 
-
-//XML
-function parseXlsxSheet(sheet,exec){
-    const workbook = XLSX.readFile(_file);
-
-    const sheet_name_list = workbook.SheetNames;
-
-    for (const y of sheet_name_list) {
-
-        if(y != sheet)
-        {
-            continue;
-        }
-        var worksheet = workbook.Sheets[y];
-        var headers = {};
-        var data = [];
-
-        for (const z in worksheet) {
-            if (z[0] === '!') continue;
-            //parse out the column, row, and value
-            var col = z.substring(0, 1);
-            var row = parseInt(z.substring(1));
-            var value = worksheet[z].v;
-
-            //store header names
-            if (row == 1) {
-                headers[col] = value;
-                continue;
-            }
-
-            if (!data[row]) data[row] = {};
-            data[row][headers[col]] = value;
-          
-        }
-
-        for (const row in data) {
-            exec(data[row]);
-        }
-       
-
-    }
-};
+*/
 //XML
 
